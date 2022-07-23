@@ -1,0 +1,103 @@
+apply plugin: 'java-library'
+apply plugin: 'kotlin'
+apply plugin: 'maven-publish'
+apply plugin: "signing"
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation deps.kotlin_stdlib
+}
+
+sourceCompatibility = JavaVersion.VERSION_1_8
+targetCompatibility = JavaVersion.VERSION_1_8
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}
+
+task testDebugUnitTest(type: Test)
+
+task testReleaseUnitTest(type: Test)
+
+version = libraryVersion
+group = groupId
+
+afterEvaluate {
+    publishing {
+        publications {
+            normal(MavenPublication) {
+                artifact sourcesJar
+                artifact javadocJar
+                artifact jar
+
+                pom {
+                    packaging 'jar'
+
+                    name = 'viewmodel-tools'
+                    description =  "Kin Android SDK View Model Tools"
+                    url = 'https://github.com/kinecosystem/kin-android/tree/master/design/viewmodel-tools'
+                    licenses {
+                        license {
+                            name = 'MIT License'
+                            url = 'https://github.com/kinecosystem/kin-android/blob/master/LICENSE.md'
+                        }
+                    }
+
+                    scm {
+                        connection = 'scm:git:github.com/kinecosystem/kin-android.git'
+                        developerConnection = 'scm:git:ssh://github.com/kinecosystem/kin-android.git'
+                        url = 'https://github.com/kinecosystem/kin-android/tree/master/design/viewmodel-tools'
+                    }
+
+                    developers {
+                        developer {
+                            id = 'kin-ci'
+                            name = 'Kin CI'
+                            email = 'eng+ci@kin.org'
+                        }
+                    }
+
+                    withXml {
+                        def root = asNode()
+                        root.children().last() //+ pomConfig
+                        def depsNode = root["dependencies"][0] ?: root.appendNode("dependencies")
+                        def addDep = {
+                            if (it.group == null) return // Avoid empty dependency nodes
+
+                            def dependencyNode = depsNode.appendNode('dependency')
+                            dependencyNode.appendNode('groupId', it.group)
+                            dependencyNode.appendNode('artifactId', it.name)
+                            dependencyNode.appendNode('version', it.version)
+
+                            if (it.hasProperty('optional') && it.optional) {
+                                dependencyNode.appendNode('optional', 'true')
+                            }
+                            dependencyNode.appendNode("scope", "runtime")
+                        }
+
+                        configurations.implementation.dependencies.each addDep
+                    }
+                }
+            }
+        }
+    }
+}
+
+ext["signing.keyId"] = rootProject.ext["signing.keyId"]
+ext["signing.password"] = rootProject.ext["signing.password"]
+ext["signing.secretKeyRingFile"] = rootProject.ext["signing.secretKeyRingFile"]
+
+signing {
+    sign publishing.publications
+}
